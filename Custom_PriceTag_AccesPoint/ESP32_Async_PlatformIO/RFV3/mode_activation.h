@@ -166,7 +166,7 @@ private:
       break;
     case 13: //RF Region 0x40 = EU, 0x38 = US
       tx_act_buffer[8] = 9;
-      tx_act_buffer[9] = 0x40;
+      tx_act_buffer[9] = 0x38;
       break;
     case 14: //Extended Sleep 1092 minutes = 65520 seconds = 0xFFF0
       tx_act_buffer[8] = 10;

@@ -19,6 +19,7 @@
 #include "mode_wu_activation.h"
 #include "mode_wun_activation.h"
 #include "mode_activation.h"
+#include "esp_task_wdt.h"
 
 class ModePlaceholder : public mode_class
 {
@@ -55,6 +56,7 @@ void setup()
   Serial.begin(500000);
   Serial.setDebugOutput(true);
   SPIFFS.begin(true);
+  esp_task_wdt_init(30, true); // Set timeout to 30 seconds
   init_spi();
   uint8_t radio_status;
   while ((radio_status=init_radio()))
@@ -118,6 +120,7 @@ void loop()
     interrupt_counter = 0;
     currentMode->new_interval();
   }
+  esp_task_wdt_reset();
 }
 
 void set_mode_idle()

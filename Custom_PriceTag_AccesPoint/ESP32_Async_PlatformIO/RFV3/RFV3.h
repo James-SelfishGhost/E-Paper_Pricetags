@@ -33,7 +33,7 @@
 #define SS_PIN 5
 
 //#define GDO0 32 not used currently
-#define GDO2 4
+#define GDO2 26
 
 void log(String message);
 
