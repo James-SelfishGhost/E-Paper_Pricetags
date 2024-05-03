@@ -20,6 +20,31 @@
 #include "mode_wun_activation.h"
 #include "mode_activation.h"
 #include "esp_task_wdt.h"
+#include "trans_assist.h"
+#include "settings.h"
+#include <PubSubClient.h>
+
+WiFiClient espClient;
+PubSubClient mqttClient(espClient);
+
+const char* mqttServer = "mqtt.selfishghost.net";
+const int mqttPort = 1883; // Port for SSL/TLS
+const char* mqttUser = "SelfishMQTT";
+const char* mqttPassword = "";
+
+
+const char* commandTopic = "esp32/command";
+const char* commandTopicSend = "esp32/command/send";
+const char* commandTopicMode = "esp32/command/mode";
+const char* responseTopic = "esp32/response";
+const char* statusTopic = "esp32/status";
+const char* modeTopic = "esp32/mode";
+const char* fileUploadTopicBlack = "esp32/fileupload/black";
+const char* fileUploadTopicRed = "esp32/fileupload/red";
+const char* tagIdTopic = "esp32/tagid";
+const char* sendStatusCommandTopic = "esp32/command/sendStatus";
+const char* commandTopicWake = "esp32/command/wake";
+
 
 class ModePlaceholder : public mode_class
 {
@@ -31,6 +56,8 @@ mode_class *tempMode = &modeIdle;
 
 volatile int interrupt_counter = 0;
 int no_count_counter = 0;
+int tagid = 0;
+
 
 volatile int int_fired = 0;
 void IRAM_ATTR GDO2_interrupt()
@@ -38,6 +65,165 @@ void IRAM_ATTR GDO2_interrupt()
   interrupt_counter++;
   int_fired++;
 }
+
+void mqttCallback(char* topic, byte* payload, unsigned int length) {
+  if (strcmp(topic, fileUploadTopicBlack) == 0) {
+    // Create a unique filename based on the current timestamp
+    String filename = "/black_layer.bmp";
+
+    // Open the file for writing
+    File file = SPIFFS.open(filename, "w");
+    if (!file) {
+      Serial.println("Failed to open file for writing");
+      publishResponse("Failed to upload black layer");
+      return;
+    }
+
+    // Write the received data to the file
+    if (file.write(payload, length) != length) {
+      Serial.println("Failed to write file");
+      publishResponse("Failed to upload black layer");
+    } else {
+      Serial.println("File saved successfully");
+      publishResponse("Black layer uploaded");
+    }
+
+    // Close the file
+    file.close();
+  } else if (strcmp(topic, fileUploadTopicRed) == 0) {
+    // Create a unique filename based on the current timestamp
+    String filename = "/red_layer.bmp";
+
+    // Open the file for writing
+    File file = SPIFFS.open(filename, "w");
+    if (!file) {
+      Serial.println("Failed to open file for writing");
+      publishResponse("Failed to upload red layer");
+      return;
+    }
+
+    // Write the received data to the file
+    if (file.write(payload, length) != length) {
+      Serial.println("Failed to write file");
+      publishResponse("Failed to upload red layer");
+    } else {
+      Serial.println("File saved successfully");
+      publishResponse("Red layer uploaded");
+    }
+
+    // Close the file
+    file.close();
+  } else if (strcmp(topic, sendStatusCommandTopic) == 0) {
+    // Handle the "send status" command
+    String status = get_mode_string();
+    publishStatus(status.c_str());
+  } else if (strcmp(topic, tagIdTopic) == 0) {
+    // Handle the tag ID
+    String tagId = String((char*)payload).substring(0, length);
+    tagid=tagId.toInt();
+  } else if (strcmp(topic, commandTopicSend) == 0) {
+    // Handle the black and red image files
+    String filename = "/black_layer.bmp";
+    String filenameColor = "/red_layer.bmp";
+    int id = tagid;
+    Serial.println("MQTT COMMAND SEND ID: " + String(id));
+    char buffer[50];
+    sprintf(buffer, "MQTT COMMAND SEND ID: %d", id);
+    publishResponse(buffer);
+
+    if (!SPIFFS.exists(filename)) {
+      Serial.println("Error opening file");
+      publishStatus("Error opening file");
+      return;
+    }
+
+    if (filenameColor != "" && !SPIFFS.exists(filenameColor)) {
+      Serial.println("Error opening color file");
+      publishStatus("Error opening color file");
+      return;
+    }
+
+    int compressedLen = load_img_to_bufer(filename, filenameColor, 0);
+
+    if (compressedLen) {
+      set_is_data_waiting(id);
+      Serial.println("OK cmd to display " + String(id) + " File: " + filename + " Len: " + String(compressedLen));
+     // publishStatus("OK cmd to display " + String(id) + " File: " + filename + " Len: " + String(compressedLen));
+    } else {
+      Serial.println("Something wrong with the file");
+      publishStatus("Something wrong with the file");
+    }
+  }  else if (strcmp(topic, commandTopicMode) == 0) {
+    publishMode();
+  } else if (strcmp(topic, commandTopicWake) == 0) {
+    set_is_data_waiting(0);
+    set_mode_full_sync();
+  }
+
+}
+
+void publishMode() {
+  String actiStatus = "";
+  String sendStatus = "";
+
+  switch (get_last_activation_status()) {
+    case 0:
+      actiStatus = "not started";
+      break;
+    case 1:
+      actiStatus = "started";
+      break;
+    case 2:
+      actiStatus = "timeout";
+      break;
+    case 3:
+      actiStatus = "successful";
+      break;
+    default:
+      actiStatus = "Error";
+      break;
+  }
+
+  switch (get_last_send_status()) {
+    case 0:
+      sendStatus = "nothing send";
+      break;
+    case 1:
+      sendStatus = "in sending";
+      break;
+    case 2:
+      sendStatus = "timeout";
+      break;
+    case 3:
+      sendStatus = "successful";
+      break;
+    default:
+      sendStatus = "Error";
+      break;
+  }
+
+  String modeData = "Send: " + sendStatus +
+                    " , waiting: " + String(get_is_data_waiting_raw()) +
+                    "\nActivation: " + actiStatus +
+                    "\nNetID " + String(get_network_id()) +
+                    " freq " + String(get_freq()) +
+                    " slot " + String(get_slot_address()) +
+                    " bytes left: " + String(get_still_to_send()) +
+                    " Open: " + String(get_trans_file_open()) +
+                    "\nlast answer: " + get_last_receive_string() +
+                    "\nmode " + get_mode_string();
+
+  mqttClient.publish(modeTopic, modeData.c_str());
+}
+
+void publishStatus(const char* status) {
+  mqttClient.publish(statusTopic, status);
+}
+
+void publishResponse(const char* response) {
+  mqttClient.publish(responseTopic, response);
+}
+
 
 void init_interrupt()
 {
@@ -71,8 +257,33 @@ void setup()
   init_interrupt();
   init_timer();
   init_web();
-}
+  mqttClient.setServer(mqttServer, mqttPort);
+  mqttClient.setCallback(mqttCallback);
 
+  // Set the maximum MQTT packet size
+  mqttClient.setBufferSize(1024 * 5); // Adjust the buffer size as needed
+
+  // Connect to MQTT broker
+  while (!mqttClient.connected()) {
+    if (mqttClient.connect("ESP32Client", mqttUser, mqttPassword)) {
+      Serial.println("Connected to MQTT broker");
+      mqttClient.subscribe(commandTopic);
+      mqttClient.subscribe(fileUploadTopicBlack);
+      mqttClient.subscribe(fileUploadTopicRed);
+      mqttClient.subscribe(tagIdTopic);
+      mqttClient.subscribe(statusTopic);
+      mqttClient.subscribe(responseTopic);
+      mqttClient.subscribe(commandTopicSend);
+      mqttClient.subscribe(commandTopicMode);
+      mqttClient.subscribe(commandTopicWake);
+    } else {
+      Serial.print("Failed to connect to MQTT broker, rc=");
+      Serial.print(mqttClient.state());
+      Serial.println(" Retrying in 5 seconds...");
+      delay(5000);
+    }
+  }
+}
 void loop()
 {
   if (int_fired)
@@ -121,6 +332,7 @@ void loop()
     currentMode->new_interval();
   }
   esp_task_wdt_reset();
+  mqttClient.loop();
 }
 
 void set_mode_idle()

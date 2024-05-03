@@ -13,6 +13,7 @@
 #include <ESPmDNS.h>
 #include <WiFi.h>
 #include <AsyncTCP.h>
+#include <PubSubClient.h>
 #endif
 #ifdef ARDUINO_ARCH_ESP8266
 #include <ESP8266WiFi.h>
@@ -26,6 +27,7 @@
 #include "utils.h"
 #include "trans_assist.h"
 #include "wu_assist.h"
+extern PubSubClient mqttClient;
 
 #define CLK_PIN 18
 #define MOSI_PIN 23
@@ -47,3 +49,5 @@ void set_mode_wu_activation();
 void set_mode_wun_activation();
 void set_mode_activation();
 String get_mode_string();
+void mqttCallback(char* topic, byte* payload, unsigned int length);
+void publishStatus(const char* status);
