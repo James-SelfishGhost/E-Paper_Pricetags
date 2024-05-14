@@ -269,72 +269,7 @@ void reconnectMQTT() {
     }
   }
 }
-void updateTFTDisplay() {
-  String displayText = "";
 
-  // Get the current mode
-  String modeData = "Mode: " + get_mode_string() + "\n";
-  displayText += modeData;
-
-  // Get the activation status
-  String actiStatus = "";
-  switch (get_last_activation_status()) {
-    case 0:
-      actiStatus = "not started";
-      break;
-    case 1:
-      actiStatus = "started";
-      break;
-    case 2:
-      actiStatus = "timeout";
-      break;
-    case 3:
-      actiStatus = "successful";
-      break;
-    default:
-      actiStatus = "Error";
-      break;
-  }
-  String activationData = "Activation: " + actiStatus + "\n";
-  displayText += activationData;
-
-  // Get the send status
-  String sendStatus = "";
-  switch (get_last_send_status()) {
-    case 0:
-      sendStatus = "nothing send";
-      break;
-    case 1:
-      sendStatus = "in sending";
-      break;
-    case 2:
-      sendStatus = "timeout";
-      break;
-    case 3:
-      sendStatus = "successful";
-      break;
-    default:
-      sendStatus = "Error";
-      break;
-  }
-  String sendData = "Send: " + sendStatus + "\n";
-  displayText += sendData;
-
-  // Get additional data
-  String additionalData = "waiting: " + String(get_is_data_waiting_raw()) + "\n" +
-                          "NetID: " + String(get_network_id()) + "\n" +
-                          "freq: " + String(get_freq()) + "\n" +
-                          "slot: " + String(get_slot_address()) + "\n" +
-                          "bytes left: " + String(get_still_to_send()) + "\n" +
-                          "Open: " + String(get_trans_file_open()) + "\n" +
-                          "last answer: " + get_last_receive_string() + "\n";
-  displayText += additionalData;
-
-  #ifdef HAS_TFT
-    extern void TFTLog(String text);
-    TFTLog(displayText);
-  #endif
-}
 void init_interrupt()
 {
   pinMode(GDO2, INPUT);
@@ -349,6 +284,13 @@ void log(String message)
   //   extern void TFTLog(String text);
   //   TFTLog(message);
   // #endif
+}
+void logTFT(String message)
+{
+  #ifdef HAS_TFT
+    extern void TFTLog(String text);
+    TFTLog(message);
+  #endif
 }
 
 void setup()
@@ -368,8 +310,10 @@ void setup()
   {
     if (radio_status == 1)
       Serial.println("Radio not working!!! ERROR");
+      logTFT("Radio not working!!! ERROR");
     if (radio_status == 2)
       Serial.println("GPIO2 Interrupt input not working");
+      logTFT("GPIO2 Interrupt input not working");
     delay(1000);
   }
   read_boot_settings();
@@ -403,10 +347,7 @@ void setup()
     } else {
       Serial.print("Failed to connect to MQTT broker, rc=" + String(mqttClient.state()));
       log("Failed to connect to MQTT broker, rc=" + String(mqttClient.state()));
-      #ifdef HAS_TFT
-        extern void TFTLog(String text);
-        TFTLog("Failed to connect to MQTT broker, rc=" + String(mqttClient.state()));
-      #endif
+      logTFT("Failed to connect to MQTT broker, rc=" + String(mqttClient.state()));
       Serial.println(" Retrying in 5 seconds...");
       delay(5000);
     }
@@ -459,15 +400,16 @@ void loop()
     interrupt_counter = 0;
     currentMode->new_interval();
   }
-  // #ifdef HAS_TFT
-  //   extern void yellow_ap_display_loop(void);
-  //   yellow_ap_display_loop();
-  //   static unsigned long lastTFTUpdateTime = 0;
-  //   if (millis() - lastTFTUpdateTime >= 1000) {
-  //     lastTFTUpdateTime = millis();
-  //     updateTFTDisplay();
-  //   }
-  // #endif
+  #ifdef HAS_TFT
+    extern void yellow_ap_display_loop(void);
+    yellow_ap_display_loop();
+    static unsigned long lastTFTUpdateTime = 0;
+    if (millis() - lastTFTUpdateTime >= 1000) {
+      lastTFTUpdateTime = millis();
+      extern void publishModeTFT();
+      publishModeTFT();
+    }
+  #endif
   
   esp_task_wdt_reset();
   if (!mqttClient.connected()) {

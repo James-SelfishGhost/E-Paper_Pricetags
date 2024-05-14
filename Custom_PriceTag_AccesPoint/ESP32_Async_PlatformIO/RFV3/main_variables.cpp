@@ -197,6 +197,15 @@ int get_last_send_status()
 void set_last_send_status(int state)
 {
   last_send_status = state;
+  #ifdef HAS_TFT
+  if (state == 3)
+  {
+  extern void TFTLog(String text);
+  extern void setLastSentId(int id);
+  setLastSentId(display_id);
+  TFTLog("Tag ID: " + String(display_id) + " Sent");
+  }
+  #endif
 }
 
 /* New Activation mode */
