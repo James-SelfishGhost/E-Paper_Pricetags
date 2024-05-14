@@ -230,6 +230,10 @@ void publishResponse(const char* response) {
 }
 void reconnectMQTT() {
   // Loop until we're reconnected
+  #ifdef HAS_TFT
+    extern void TFTLog(String text);
+    TFTLog("Attempting MQTT connection...");
+  #endif
   while (!mqttClient.connected()) {
     Serial.print("Attempting MQTT connection...");
     log("Attempting MQTT connection...");
@@ -341,10 +345,10 @@ void log(String message)
 {
   Serial.print(millis());
   Serial.println(" : " + message);
-  #ifdef HAS_TFT
-    extern void TFTLog(String text);
-    TFTLog(message);
-  #endif
+  // #ifdef HAS_TFT
+  //   extern void TFTLog(String text);
+  //   TFTLog(message);
+  // #endif
 }
 
 void setup()
@@ -392,9 +396,17 @@ void setup()
       mqttClient.subscribe(commandTopicMode);
       mqttClient.subscribe(commandTopicWake);
       log("MQTT connected");
+      #ifdef HAS_TFT
+        extern void TFTLog(String text);
+        TFTLog("MQTT Connected");
+      #endif
     } else {
       Serial.print("Failed to connect to MQTT broker, rc=" + String(mqttClient.state()));
       log("Failed to connect to MQTT broker, rc=" + String(mqttClient.state()));
+      #ifdef HAS_TFT
+        extern void TFTLog(String text);
+        TFTLog("Failed to connect to MQTT broker, rc=" + String(mqttClient.state()));
+      #endif
       Serial.println(" Retrying in 5 seconds...");
       delay(5000);
     }
@@ -450,9 +462,15 @@ void loop()
   #ifdef HAS_TFT
     extern void yellow_ap_display_loop(void);
     yellow_ap_display_loop();
+    static unsigned long lastTFTUpdateTime = 0;
+    if (millis() - lastTFTUpdateTime >= 1000) {
+      lastTFTUpdateTime = millis();
+      updateTFTDisplay();
+    }
   #endif
+  
   esp_task_wdt_reset();
-    if (!mqttClient.connected()) {
+  if (!mqttClient.connected()) {
     reconnectMQTT();
   }
   mqttClient.loop();
