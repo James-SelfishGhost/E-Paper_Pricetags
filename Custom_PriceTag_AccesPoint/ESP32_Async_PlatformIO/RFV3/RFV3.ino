@@ -459,15 +459,15 @@ void loop()
     interrupt_counter = 0;
     currentMode->new_interval();
   }
-  #ifdef HAS_TFT
-    extern void yellow_ap_display_loop(void);
-    yellow_ap_display_loop();
-    static unsigned long lastTFTUpdateTime = 0;
-    if (millis() - lastTFTUpdateTime >= 1000) {
-      lastTFTUpdateTime = millis();
-      updateTFTDisplay();
-    }
-  #endif
+  // #ifdef HAS_TFT
+  //   extern void yellow_ap_display_loop(void);
+  //   yellow_ap_display_loop();
+  //   static unsigned long lastTFTUpdateTime = 0;
+  //   if (millis() - lastTFTUpdateTime >= 1000) {
+  //     lastTFTUpdateTime = millis();
+  //     updateTFTDisplay();
+  //   }
+  // #endif
   
   esp_task_wdt_reset();
   if (!mqttClient.connected()) {
