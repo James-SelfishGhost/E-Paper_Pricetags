@@ -27,7 +27,7 @@
 #include <SPIFFSEditor.h>
 #include <OneBitDisplay.h>
 #include "font.h"
-
+#include "ips_display.h"
 #include "trans_assist.h"
 #include "settings.h"
 
@@ -146,7 +146,10 @@ void init_web()
   }
   Serial.print("Connected! IP address: ");
   Serial.println(WiFi.localIP());
-
+  #ifdef HAS_TFT
+      TFTLog("Connected! IP address: ");
+      TFTLog(WiFi.localIP().toString());
+  #endif
   // Make accessible via http://esl.local using mDNS responder
   if (!MDNS.begin("ESL"))
     {

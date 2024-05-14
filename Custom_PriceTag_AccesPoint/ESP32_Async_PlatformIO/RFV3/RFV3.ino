@@ -24,6 +24,11 @@
 #include "settings.h"
 #include <PubSubClient.h>
 
+// #if defined(ARDUINO_ESP32S3_DEV)
+//   #include <TFT_eSPI.h>
+// #endif
+
+
 WiFiClient espClient;
 PubSubClient mqttClient(espClient);
 
@@ -223,8 +228,109 @@ void publishStatus(const char* status) {
 void publishResponse(const char* response) {
   mqttClient.publish(responseTopic, response);
 }
+void reconnectMQTT() {
+  // Loop until we're reconnected
+  while (!mqttClient.connected()) {
+    Serial.print("Attempting MQTT connection...");
+    log("Attempting MQTT connection...");
+    // Create a unique client ID
+    String clientId = "ESP32Client-";
+    clientId += String(random(0xffff), HEX);
+
+    // Attempt to connect
+    if (mqttClient.connect(clientId.c_str(), mqttUser, mqttPassword)) {
+      Serial.println("connected");
+      mqttClient.subscribe(commandTopic);
+      mqttClient.subscribe(fileUploadTopicBlack);
+      mqttClient.subscribe(fileUploadTopicRed);
+      mqttClient.subscribe(tagIdTopic);
+      mqttClient.subscribe(statusTopic);
+      mqttClient.subscribe(responseTopic);
+      mqttClient.subscribe(commandTopicSend);
+      mqttClient.subscribe(commandTopicMode);
+      mqttClient.subscribe(commandTopicWake);
+      log("MQTT reconnected");
+
+      // Publish a message to indicate successful reconnection
+      mqttClient.publish(statusTopic, "ESP32 reconnected");
+    } else {
+      Serial.print("failed, rc=");
+      Serial.print(mqttClient.state());
+      Serial.println(" try again in 5 seconds");
+      log("Failed to connect to MQTT broker, rc=" + String(mqttClient.state()));
 
 
+      // Wait 5 seconds before retrying
+      delay(5000);
+    }
+  }
+}
+void updateTFTDisplay() {
+  String displayText = "";
+
+  // Get the current mode
+  String modeData = "Mode: " + get_mode_string() + "\n";
+  displayText += modeData;
+
+  // Get the activation status
+  String actiStatus = "";
+  switch (get_last_activation_status()) {
+    case 0:
+      actiStatus = "not started";
+      break;
+    case 1:
+      actiStatus = "started";
+      break;
+    case 2:
+      actiStatus = "timeout";
+      break;
+    case 3:
+      actiStatus = "successful";
+      break;
+    default:
+      actiStatus = "Error";
+      break;
+  }
+  String activationData = "Activation: " + actiStatus + "\n";
+  displayText += activationData;
+
+  // Get the send status
+  String sendStatus = "";
+  switch (get_last_send_status()) {
+    case 0:
+      sendStatus = "nothing send";
+      break;
+    case 1:
+      sendStatus = "in sending";
+      break;
+    case 2:
+      sendStatus = "timeout";
+      break;
+    case 3:
+      sendStatus = "successful";
+      break;
+    default:
+      sendStatus = "Error";
+      break;
+  }
+  String sendData = "Send: " + sendStatus + "\n";
+  displayText += sendData;
+
+  // Get additional data
+  String additionalData = "waiting: " + String(get_is_data_waiting_raw()) + "\n" +
+                          "NetID: " + String(get_network_id()) + "\n" +
+                          "freq: " + String(get_freq()) + "\n" +
+                          "slot: " + String(get_slot_address()) + "\n" +
+                          "bytes left: " + String(get_still_to_send()) + "\n" +
+                          "Open: " + String(get_trans_file_open()) + "\n" +
+                          "last answer: " + get_last_receive_string() + "\n";
+  displayText += additionalData;
+
+  #ifdef HAS_TFT
+    extern void TFTLog(String text);
+    TFTLog(displayText);
+  #endif
+}
 void init_interrupt()
 {
   pinMode(GDO2, INPUT);
@@ -235,6 +341,10 @@ void log(String message)
 {
   Serial.print(millis());
   Serial.println(" : " + message);
+  #ifdef HAS_TFT
+    extern void TFTLog(String text);
+    TFTLog(message);
+  #endif
 }
 
 void setup()
@@ -243,6 +353,11 @@ void setup()
   Serial.setDebugOutput(true);
   SPIFFS.begin(true);
   esp_task_wdt_init(30, true); // Set timeout to 30 seconds
+  #ifdef HAS_TFT
+    extern void yellow_ap_display_init(void);
+    yellow_ap_display_init();
+  #endif
+
   init_spi();
   uint8_t radio_status;
   while ((radio_status=init_radio()))
@@ -276,9 +391,10 @@ void setup()
       mqttClient.subscribe(commandTopicSend);
       mqttClient.subscribe(commandTopicMode);
       mqttClient.subscribe(commandTopicWake);
+      log("MQTT connected");
     } else {
-      Serial.print("Failed to connect to MQTT broker, rc=");
-      Serial.print(mqttClient.state());
+      Serial.print("Failed to connect to MQTT broker, rc=" + String(mqttClient.state()));
+      log("Failed to connect to MQTT broker, rc=" + String(mqttClient.state()));
       Serial.println(" Retrying in 5 seconds...");
       delay(5000);
     }
@@ -331,7 +447,14 @@ void loop()
     interrupt_counter = 0;
     currentMode->new_interval();
   }
+  #ifdef HAS_TFT
+    extern void yellow_ap_display_loop(void);
+    yellow_ap_display_loop();
+  #endif
   esp_task_wdt_reset();
+    if (!mqttClient.connected()) {
+    reconnectMQTT();
+  }
   mqttClient.loop();
 }
 

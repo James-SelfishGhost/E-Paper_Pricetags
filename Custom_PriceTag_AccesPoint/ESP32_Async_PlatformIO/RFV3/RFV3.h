@@ -27,15 +27,21 @@
 #include "utils.h"
 #include "trans_assist.h"
 #include "wu_assist.h"
+// #if defined(ARDUINO_ESP32S3_DEV)
+//   #include <TFT_eSPI.h>
+// #endif
+
+
+
 extern PubSubClient mqttClient;
 
-#define CLK_PIN 18
-#define MOSI_PIN 23
-#define MISO_PIN 19
-#define SS_PIN 5
+#define CLK_PIN 7//18
+#define MOSI_PIN 5//23
+#define MISO_PIN 6//19
+#define SS_PIN 4//5
 
 //#define GDO0 32 not used currently
-#define GDO2 26
+#define GDO2  15//26
 
 void log(String message);
 
